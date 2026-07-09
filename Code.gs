@@ -1,7 +1,7 @@
 // ── Utility functions ──────────────────────────────────────────────
 
 const RACK_U_COUNT = 48;
-const SPREADSHEET_ID = 'PASTE_NEW_SPREADSHEET_ID_HERE';
+const SPREADSHEET_ID = '1UrZDceueWilD7-BQGEV8xU3kzpAkXOC-1VzQJTY_kZM';
 const GEMINI_API_KEY = 'AIzaSyAHrtB4fdBwxLY9BH3Ml6vOoo2Us_mlLvw';
 
 function getSheet(name) {
@@ -160,21 +160,23 @@ function recordInventoryIn(params) {
   const items = (params.items && params.items.length > 0) ? params.items : [{ sn: '', pn: '' }];
   const date = params.date ? new Date(params.date) : new Date();
   const batchId = Utilities.getUuid();
-  items.forEach(function(item) {
-    sheet.appendRow([date, params.model || '', params.quantity || '', params.signee || '', item.sn || '', item.pn || '', batchId]);
+  const rows = items.map(function(item) {
+    return [date, params.model || '', params.quantity || '', params.signee || '', item.sn || '', item.pn || '', batchId];
   });
-  return { success: true, count: items.length };
+  sheet.getRange(sheet.getLastRow() + 1, 1, rows.length, rows[0].length).setValues(rows);
+  return { success: true, count: rows.length };
 }
 
 // ── recordInventoryOut ──────────────────────────────────────────────
 
-const OUT_HEADERS = ['日期', '領用設備', '領用型號', '領用數量', 'Rack編號', 'CSI出庫人員', '領用人員', '照片1', '照片2', '照片3', '照片4', '照片5', '設備用途'];
+const OUT_HEADERS = ['日期', '領用設備', '領用型號', '領用數量', 'Rack編號', 'CSI出庫人員', '領用人員', '照片1', '照片2', '照片3', '照片4', '照片5', '設備用途', 'S/N清單'];
 const RET_HEADERS = ['日期', '回庫設備', '回庫型號', '回庫數量', 'Rack編號', 'CSI回庫人員', '回庫人員', '照片1', '照片2', '照片3', '照片4', '照片5'];
 
 function recordInventoryOut(params) {
   const sheet = getOrCreateSheet('出庫紀錄', OUT_HEADERS);
   const date   = params.date ? new Date(params.date) : new Date();
   const photos = Array.isArray(params.photos) ? params.photos : [];
+  const sns = Array.isArray(params.sns) ? params.sns.filter(Boolean).join('\n') : '';
   sheet.appendRow([
     date,
     params.deviceType || '',
@@ -188,7 +190,8 @@ function recordInventoryOut(params) {
     photos[2] || '',
     photos[3] || '',
     photos[4] || '',
-    params.usage      || ''
+    params.usage      || '',
+    sns
   ]);
   return { success: true };
 }
@@ -263,6 +266,7 @@ function queryInventoryOut(params) {
         String(data[i][11] || '')
       ].filter(Boolean),
       usage:     String(data[i][12] || ''),
+      sns:       String(data[i][13] || '').split('\n').filter(Boolean),
       _sheet:    '出庫紀錄',
       _row:      i + 1
     });
@@ -279,7 +283,8 @@ function updateInventoryOut(params) {
   if (!row || row < 2) return { success: false, error: '參數錯誤' };
   const photos = Array.isArray(params.photos) ? params.photos : [];
   const date   = params.date ? new Date(params.date) : new Date();
-  sheet.getRange(row, 1, 1, 13).setValues([[
+  const sns    = Array.isArray(params.sns) ? params.sns.filter(Boolean).join('\n') : (params.sns || '');
+  sheet.getRange(row, 1, 1, 14).setValues([[
     date,
     params.deviceType || '',
     params.model      || '',
@@ -292,7 +297,8 @@ function updateInventoryOut(params) {
     photos[2] || '',
     photos[3] || '',
     photos[4] || '',
-    params.usage      || ''
+    params.usage      || '',
+    sns
   ]]);
   return { success: true };
 }
