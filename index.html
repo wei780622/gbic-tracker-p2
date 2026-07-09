@@ -290,6 +290,13 @@
     <input type="text" id="io-usage" placeholder="例：機器學習、Web Server、外部租用…">
   </div>
 
+  <hr>
+  <label style="font-size:13px;color:#666;margin-bottom:6px;display:block">S/N 清單（選填）</label>
+  <div style="margin-bottom:8px">
+    <label style="font-size:12px;color:#888;margin-bottom:4px;display:block">貼上多筆 S/N（每行一筆）</label>
+    <textarea id="io-sns" placeholder="MT2606NT02XT8&#10;MT2606NT03AB1&#10;..." style="width:100%;height:80px;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:13px;font-family:monospace;resize:vertical;box-sizing:border-box"></textarea>
+  </div>
+
   <div class="form-group">
     <label>照片（最多 5 張）</label>
     <input type="file" id="io-photos" accept="image/*" multiple style="margin-bottom:8px">
@@ -1056,6 +1063,7 @@
     var csiStaff  = document.getElementById('io-csi').value.trim();
     var recipient = document.getElementById('io-recipient').value.trim();
     var usage     = document.getElementById('io-usage').value.trim();
+    var sns       = (document.getElementById('io-sns').value || '').split('\n').map(function(s){ return s.trim(); }).filter(Boolean);
     var errEl     = document.getElementById('io-err');
     errEl.textContent = '';
 
@@ -1068,7 +1076,7 @@
 
     uploadPhotos(photoFiles, function(photoUrls) {
       callApi({ action: 'recordInventoryOut', date: date, deviceType: device, model: model,
-        quantity: qty, rack: rack, csiStaff: csiStaff, recipient: recipient, usage: usage, photos: photoUrls })
+        quantity: qty, rack: rack, csiStaff: csiStaff, recipient: recipient, usage: usage, photos: photoUrls, sns: sns })
         .then(function (data) {
           if (data.success) {
             document.getElementById('ok-title').textContent = '出庫紀錄已送出';
@@ -1082,6 +1090,7 @@
               (photoUrls.length ? '<p><span class="lbl">照片：</span>' + photoUrls.length + ' 張已上傳</p>' : '');
             document.getElementById('io-photos').value = '';
             document.getElementById('io-photo-preview').innerHTML = '';
+            document.getElementById('io-sns').value = '';
             showPage('pg-ok');
           } else { errEl.textContent = '送出失敗：' + (data.error || '未知錯誤'); }
         }).catch(function () { errEl.textContent = '網路錯誤，請稍後再試'; });
@@ -1832,12 +1841,15 @@
       __outStore = data;
       if (!data.length) { el.innerHTML = '<p class="no-data">尚無出庫紀錄</p>'; return; }
       el.innerHTML = '<table>' +
-        '<tr><th>日期</th><th>領用設備</th><th>型號</th><th>數量</th><th>Rack</th><th>CSI出庫</th><th>領用人</th><th>設備用途</th><th>照片</th><th></th></tr>' +
+        '<tr><th>日期</th><th>領用設備</th><th>型號</th><th>數量</th><th>Rack</th><th>CSI出庫</th><th>領用人</th><th>設備用途</th><th>S/N</th><th>照片</th><th></th></tr>' +
         data.map(function (r, i) {
           var row = r._row; var sheet = r._sheet;
           var photoLinks = (r.photos || []).map(function(url, pi) {
             return '<a href="' + esc(url) + '" target="_blank" style="color:#1a73e8;font-size:12px;margin-right:4px">[' + (pi+1) + ']</a>';
           }).join('');
+          var snHtml = (r.sns && r.sns.length)
+            ? r.sns.map(function(s){ return '<div style="font-size:12px;font-family:monospace">' + esc(s) + '</div>'; }).join('')
+            : '—';
           return '<tr>' +
             '<td>' + esc(fmtDate(r.date)) + '</td>' +
             '<td>' + esc(r.device) + '</td>' +
@@ -1847,6 +1859,7 @@
             '<td>' + esc(r.csiStaff) + '</td>' +
             '<td>' + esc(r.recipient) + '</td>' +
             '<td>' + (r.usage ? esc(r.usage) : '—') + '</td>' +
+            '<td>' + snHtml + '</td>' +
             '<td style="white-space:nowrap">' + (photoLinks || '—') + '</td>' +
             '<td style="white-space:nowrap;display:flex;gap:4px">' +
               '<button onclick="openOutEdit(' + i + ')" style="background:#1a73e8;color:white;border:none;border-radius:6px;padding:4px 10px;cursor:pointer;font-size:12px">編輯</button>' +
@@ -1892,6 +1905,7 @@
     document.getElementById('oe-csi').value       = r.csiStaff  || '';
     document.getElementById('oe-recipient').value = r.recipient || '';
     document.getElementById('oe-usage').value     = r.usage     || '';
+    document.getElementById('oe-sns').value       = (r.sns || []).join('\n');
     renderExistingPhotos(r.photos || []);
     document.getElementById('oe-new-preview').innerHTML = '';
     document.getElementById('oe-new-photos').value = '';
@@ -1912,6 +1926,7 @@
     var csiStaff  = document.getElementById('oe-csi').value.trim();
     var recipient = document.getElementById('oe-recipient').value.trim();
     var usage     = document.getElementById('oe-usage').value.trim();
+    var sns       = (document.getElementById('oe-sns').value || '').split('\n').map(function(s){ return s.trim(); }).filter(Boolean);
     var errEl     = document.getElementById('oe-err');
     errEl.textContent = '';
 
@@ -1933,7 +1948,7 @@
       var merged = existingPhotos.concat(newUrls).slice(0, 5);
       callApi({ action: 'updateInventoryOut', rowIndex: rowIndex, date: date,
         deviceType: device, model: model, quantity: qty, rack: rack,
-        csiStaff: csiStaff, recipient: recipient, usage: usage, photos: merged })
+        csiStaff: csiStaff, recipient: recipient, usage: usage, photos: merged, sns: sns })
         .then(function(d) {
           if (d.success) { closeOutEdit(); adminQueryOut(); }
           else { errEl.textContent = '儲存失敗：' + (d.error || '未知'); }
@@ -2446,6 +2461,10 @@
     <div class="form-group"><label>CSI 出庫人員</label><input type="text" id="oe-csi"></div>
     <div class="form-group"><label>領用人員</label><input type="text" id="oe-recipient"></div>
     <div class="form-group"><label>設備用途</label><input type="text" id="oe-usage" placeholder="例：機器學習、Web Server…"></div>
+    <div class="form-group">
+      <label>S/N 清單（每行一筆）</label>
+      <textarea id="oe-sns" style="width:100%;height:80px;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:13px;font-family:monospace;resize:vertical;box-sizing:border-box"></textarea>
+    </div>
     <div class="form-group">
       <label>現有照片</label>
       <div id="oe-existing-photos" style="font-size:13px;padding:6px 0;line-height:2"></div>
